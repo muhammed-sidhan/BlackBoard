@@ -1,0 +1,926 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Infinite Collaborative Blackboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #2c3e50, #34495e);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .header {
+            color: white;
+            text-align: center;
+            padding: 10px;
+            background: rgba(0,0,0,0.3);
+            backdrop-filter: blur(10px);
+        }
+
+        .header h1 {
+            font-size: 2em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            margin-bottom: 5px;
+        }
+
+        .header p {
+            font-size: 0.9em;
+            opacity: 0.8;
+        }
+
+        .toolbar {
+            background: rgba(0,0,0,0.8);
+            padding: 10px;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            flex-wrap: wrap;
+        }
+
+        .tool-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .tool-group label {
+            color: white;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.7);
+            font-size: 0.9em;
+        }
+
+        button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            font-size: 0.9em;
+        }
+
+        .draw-btn {
+            background: linear-gradient(45deg, #27ae60, #2ecc71);
+            color: white;
+            box-shadow: 0 4px 15px rgba(46, 204, 113, 0.3);
+        }
+
+        .draw-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(46, 204, 113, 0.4);
+        }
+
+        .erase-btn {
+            background: linear-gradient(45deg, #e74c3c, #c0392b);
+            color: white;
+            box-shadow: 0 4px 15px rgba(231, 76, 60, 0.3);
+        }
+
+        .erase-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(231, 76, 60, 0.4);
+        }
+
+        .pan-btn {
+            background: linear-gradient(45deg, #3498db, #2980b9);
+            color: white;
+            box-shadow: 0 4px 15px rgba(52, 152, 219, 0.3);
+        }
+
+        .pan-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(52, 152, 219, 0.4);
+        }
+
+        .clear-btn {
+            background: linear-gradient(45deg, #f39c12, #e67e22);
+            color: white;
+            box-shadow: 0 4px 15px rgba(243, 156, 18, 0.3);
+        }
+
+        .clear-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(243, 156, 18, 0.4);
+        }
+
+        .sync-btn {
+            background: linear-gradient(45deg, #9b59b6, #8e44ad);
+            color: white;
+            box-shadow: 0 4px 15px rgba(155, 89, 182, 0.3);
+        }
+
+        .sync-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(155, 89, 182, 0.4);
+        }
+
+        .active {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255, 255, 255, 0.2);
+        }
+
+        .connected {
+            background: linear-gradient(45deg, #27ae60, #2ecc71) !important;
+        }
+
+        input[type="range"] {
+            width: 80px;
+        }
+
+        input[type="color"] {
+            width: 40px;
+            height: 30px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        .canvas-container {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+            background: 
+                radial-gradient(circle at 50% 50%, rgba(255,255,255,0.03) 1px, transparent 1px),
+                linear-gradient(135deg, #1a1a1a, #2d2d2d);
+            background-size: 50px 50px;
+        }
+
+        canvas {
+            position: absolute;
+            cursor: crosshair;
+            image-rendering: pixelated;
+        }
+
+        canvas.pan-mode {
+            cursor: grab;
+        }
+
+        canvas.pan-mode:active {
+            cursor: grabbing;
+        }
+
+        canvas.eraser-mode {
+            cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><rect x="2" y="8" width="20" height="8" rx="2" fill="%23ff6b6b"/><rect x="4" y="6" width="16" height="4" rx="2" fill="%23ffd93d"/></svg>') 12 12, auto;
+        }
+
+        .size-display {
+            color: white;
+            font-weight: bold;
+            min-width: 25px;
+            text-align: center;
+            font-size: 0.9em;
+        }
+
+        .coordinates {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: rgba(255,255,255,0.7);
+            background: rgba(0,0,0,0.5);
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 0.8em;
+            backdrop-filter: blur(5px);
+        }
+
+        .sync-status {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            background: rgba(0,0,0,0.7);
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            backdrop-filter: blur(5px);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #e74c3c;
+            animation: pulse 2s infinite;
+        }
+
+        .status-indicator.connected {
+            background: #27ae60;
+            animation: none;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .zoom-controls {
+            position: absolute;
+            top: 60px;
+            right: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .zoom-btn {
+            width: 40px;
+            height: 40px;
+            border: none;
+            border-radius: 20px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(5px);
+        }
+
+        .zoom-btn:hover {
+            background: rgba(0,0,0,0.8);
+            transform: scale(1.1);
+        }
+
+        .instructions {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255,255,255,0.6);
+            background: rgba(0,0,0,0.5);
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            backdrop-filter: blur(5px);
+            text-align: center;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            backdrop-filter: blur(10px);
+        }
+
+        .modal-content {
+            background: linear-gradient(135deg, #2c3e50, #34495e);
+            margin: 5% auto;
+            padding: 30px;
+            border-radius: 20px;
+            width: 90%;
+            max-width: 500px;
+            text-align: center;
+            color: white;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+        }
+
+        .modal h2 {
+            margin-bottom: 20px;
+            color: #ecf0f1;
+        }
+
+        .qr-container {
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            margin: 20px 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 200px;
+        }
+
+        .session-id {
+            background: rgba(255,255,255,0.1);
+            padding: 15px;
+            border-radius: 10px;
+            margin: 15px 0;
+            font-family: monospace;
+            font-size: 1.2em;
+            letter-spacing: 2px;
+            border: 2px solid rgba(255,255,255,0.2);
+        }
+
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: -10px;
+        }
+
+        .close:hover {
+            color: white;
+        }
+
+        .online-users {
+            position: absolute;
+            bottom: 60px;
+            right: 10px;
+            background: rgba(0,0,0,0.7);
+            padding: 10px;
+            border-radius: 10px;
+            color: white;
+            font-size: 0.8em;
+            backdrop-filter: blur(5px);
+        }
+
+        .user-cursor {
+            position: absolute;
+            pointer-events: none;
+            z-index: 100;
+            transition: all 0.1s ease;
+        }
+
+        .user-cursor::after {
+            content: attr(data-user);
+            position: absolute;
+            top: 20px;
+            left: 10px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.7em;
+            white-space: nowrap;
+        }
+
+        @media (max-width: 768px) {
+            .toolbar {
+                padding: 8px;
+                gap: 8px;
+            }
+            
+            .tool-group {
+                gap: 5px;
+            }
+            
+            button {
+                padding: 6px 12px;
+                font-size: 0.8em;
+            }
+            
+            input[type="range"] {
+                width: 60px;
+            }
+            
+            .instructions {
+                font-size: 0.7em;
+                padding: 5px 10px;
+            }
+
+            .modal-content {
+                width: 95%;
+                margin: 10% auto;
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>∞ Collaborative Infinite Blackboard</h1>
+        <p>Real-time synchronized drawing across devices</p>
+    </div>
+
+    <div class="toolbar">
+        <div class="tool-group">
+            <button id="drawBtn" class="draw-btn active">✏️ Draw</button>
+            <button id="eraseBtn" class="erase-btn">🧽 Erase</button>
+            <button id="panBtn" class="pan-btn">👋 Pan</button>
+        </div>
+        
+        <div class="tool-group">
+            <label>Color:</label>
+            <input type="color" id="colorPicker" value="#ffffff">
+        </div>
+        
+        <div class="tool-group">
+            <label>Size:</label>
+            <input type="range" id="brushSize" min="1" max="50" value="5">
+            <span class="size-display" id="sizeDisplay">5</span>
+        </div>
+        
+        <div class="tool-group">
+            <button id="syncBtn" class="sync-btn">📱 Share Board</button>
+            <button id="clearBtn" class="clear-btn">🗑️ Clear All</button>
+            <button id="resetViewBtn" class="clear-btn">🎯 Reset View</button>
+        </div>
+    </div>
+
+    <div class="canvas-container" id="canvasContainer">
+        <canvas id="blackboard"></canvas>
+        
+        <div class="coordinates" id="coordinates">
+            X: 0, Y: 0 | Zoom: 100%
+        </div>
+
+        <div class="sync-status" id="syncStatus">
+            <div class="status-indicator" id="statusIndicator"></div>
+            <span id="statusText">Offline Mode</span>
+        </div>
+        
+        <div class="zoom-controls">
+            <button class="zoom-btn" id="zoomInBtn">+</button>
+            <button class="zoom-btn" id="zoomOutBtn">−</button>
+        </div>
+
+        <div class="online-users" id="onlineUsers" style="display: none;">
+            <div>👥 Online: <span id="userCount">1</span></div>
+        </div>
+        
+        <div class="instructions">
+            Draw Mode: Click and drag to draw | Pan Mode: Click and drag to move around | Mouse wheel to zoom
+        </div>
+    </div>
+
+    <!-- Sync Modal -->
+    <div id="syncModal" class="modal">
+        <div class="modal-content">
+            <span class="close" id="closeModal">&times;</span>
+            <h2>🚀 Share Your Blackboard</h2>
+            <p>Scan this QR code with your mobile device to join the collaborative session:</p>
+            
+            <div class="qr-container" id="qrContainer">
+                <div style="color: #666;">Generating QR Code...</div>
+            </div>
+            
+            <div class="session-id">
+                Session ID: <span id="sessionIdDisplay">Generating...</span>
+            </div>
+            
+            <p style="margin-top: 15px; font-size: 0.9em; opacity: 0.8;">
+                Or share this URL: <br>
+                <span id="shareUrl" style="word-break: break-all; font-family: monospace; background: rgba(255,255,255,0.1); padding: 5px; border-radius: 5px; display: inline-block; margin-top: 5px;"></span>
+            </p>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.5.3/qrcode.min.js"></script>
+    <script>
+        const canvas = document.getElementById('blackboard');
+        const ctx = canvas.getContext('2d');
+        const canvasContainer = document.getElementById('canvasContainer');
+        const drawBtn = document.getElementById('drawBtn');
+        const eraseBtn = document.getElementById('eraseBtn');
+        const panBtn = document.getElementById('panBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const resetViewBtn = document.getElementById('resetViewBtn');
+        const syncBtn = document.getElementById('syncBtn');
+        const colorPicker = document.getElementById('colorPicker');
+        const brushSize = document.getElementById('brushSize');
+        const sizeDisplay = document.getElementById('sizeDisplay');
+        const coordinates = document.getElementById('coordinates');
+        const zoomInBtn = document.getElementById('zoomInBtn');
+        const zoomOutBtn = document.getElementById('zoomOutBtn');
+        const syncModal = document.getElementById('syncModal');
+        const closeModal = document.getElementById('closeModal');
+        const syncStatus = document.getElementById('syncStatus');
+        const statusIndicator = document.getElementById('statusIndicator');
+        const statusText = document.getElementById('statusText');
+        const onlineUsers = document.getElementById('onlineUsers');
+        const userCount = document.getElementById('userCount');
+
+        // Canvas state
+        let isDrawing = false;
+        let isPanning = false;
+        let currentTool = 'draw';
+        let currentColor = '#ffffff';
+        let currentSize = 5;
+        
+        // Transform state
+        let offsetX = 0;
+        let offsetY = 0;
+        let scale = 1;
+        let lastPanX = 0;
+        let lastPanY = 0;
+
+        // Sync state
+        let isHost = false;
+        let sessionId = null;
+        let ws = null;
+        let userId = null;
+        let connectedUsers = new Map();
+        let drawingHistory = [];
+        let lastDrawTime = 0;
+
+        // Generate unique user ID
+        userId = 'user_' + Math.random().toString(36).substr(2, 9);
+
+        // Initialize canvas size
+        function resizeCanvas() {
+            const rect = canvasContainer.getBoundingClientRect();
+            canvas.width = rect.width * 2;
+            canvas.height = rect.height * 2;
+            canvas.style.width = rect.width + 'px';
+            canvas.style.height = rect.height + 'px';
+            
+            ctx.scale(2, 2);
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            
+            updateTransform();
+        }
+
+        function updateTransform() {
+            canvas.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
+            canvas.style.transformOrigin = '0 0';
+            
+            const worldX = Math.round(-offsetX / scale);
+            const worldY = Math.round(-offsetY / scale);
+            const zoomPercent = Math.round(scale * 100);
+            coordinates.textContent = `X: ${worldX}, Y: ${worldY} | Zoom: ${zoomPercent}%`;
+        }
+
+        // WebSocket connection and sync
+        function createSession() {
+            sessionId = 'session_' + Math.random().toString(36).substr(2, 9);
+            isHost = true;
+            connectToServer();
+            showSyncModal();
+        }
+
+        function joinSession(sessionId) {
+            this.sessionId = sessionId;
+            isHost = false;
+            connectToServer();
+        }
+
+        function connectToServer() {
+            // Simulated WebSocket connection (would connect to your real server)
+            updateSyncStatus('connecting', 'Connecting...');
+            
+            setTimeout(() => {
+                // Simulate successful connection
+                updateSyncStatus('connected', `Connected • Session: ${sessionId.substr(-6)}`);
+                onlineUsers.style.display = 'block';
+                syncBtn.classList.add('connected');
+                syncBtn.innerHTML = '✅ Connected';
+                
+                // Simulate other users joining
+                setTimeout(() => {
+                    simulateUserJoin('Mobile User');
+                }, 2000);
+            }, 1500);
+        }
+
+        function updateSyncStatus(status, text) {
+            statusText.textContent = text;
+            statusIndicator.className = `status-indicator ${status}`;
+        }
+
+        function simulateUserJoin(username) {
+            const user = { id: 'user_mobile', name: username };
+            connectedUsers.set(user.id, user);
+            userCount.textContent = connectedUsers.size + 1; // +1 for current user
+        }
+
+        function showSyncModal() {
+            const currentUrl = window.location.href;
+            const sessionUrl = `${currentUrl}?session=${sessionId}`;
+            
+            // Generate QR code
+            const qrContainer = document.getElementById('qrContainer');
+            qrContainer.innerHTML = '';
+            
+            QRCode.toCanvas(qrContainer, sessionUrl, {
+                width: 200,
+                margin: 2,
+                color: {
+                    dark: '#000000',
+                    light: '#FFFFFF'
+                }
+            });
+            
+            document.getElementById('sessionIdDisplay').textContent = sessionId;
+            document.getElementById('shareUrl').textContent = sessionUrl;
+            syncModal.style.display = 'block';
+        }
+
+        function broadcastDrawing(data) {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                // Store locally for when connection is established
+                drawingHistory.push(data);
+                return;
+            }
+            
+            // Would send to WebSocket server
+            console.log('Broadcasting:', data);
+        }
+
+        function receiveDrawing(data) {
+            // Apply remote drawing to canvas
+            const oldComposite = ctx.globalCompositeOperation;
+            const oldStyle = ctx.strokeStyle;
+            const oldWidth = ctx.lineWidth;
+            
+            ctx.globalCompositeOperation = data.operation;
+            ctx.strokeStyle = data.color;
+            ctx.lineWidth = data.size / scale;
+            
+            if (data.type === 'start') {
+                ctx.beginPath();
+                ctx.moveTo(data.x, data.y);
+            } else if (data.type === 'draw') {
+                ctx.lineTo(data.x, data.y);
+                ctx.stroke();
+            } else if (data.type === 'end') {
+                ctx.beginPath();
+            }
+            
+            // Restore previous settings
+            ctx.globalCompositeOperation = oldComposite;
+            ctx.strokeStyle = oldStyle;
+            ctx.lineWidth = oldWidth;
+        }
+
+        // Check for session ID in URL
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('session')) {
+            joinSession(urlParams.get('session'));
+        }
+
+        // Initialize
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // Tool selection
+        function setTool(tool) {
+            currentTool = tool;
+            
+            document.querySelectorAll('.toolbar button:not(.sync-btn):not(.clear-btn)').forEach(btn => btn.classList.remove('active'));
+            
+            if (tool === 'draw') {
+                drawBtn.classList.add('active');
+                canvas.className = '';
+            } else if (tool === 'erase') {
+                eraseBtn.classList.add('active');
+                canvas.className = 'eraser-mode';
+            } else if (tool === 'pan') {
+                panBtn.classList.add('active');
+                canvas.className = 'pan-mode';
+            }
+        }
+
+        drawBtn.addEventListener('click', () => setTool('draw'));
+        eraseBtn.addEventListener('click', () => setTool('erase'));
+        panBtn.addEventListener('click', () => setTool('pan'));
+
+        // Sync button
+        syncBtn.addEventListener('click', () => {
+            if (!sessionId) {
+                createSession();
+            } else {
+                showSyncModal();
+            }
+        });
+
+        // Modal controls
+        closeModal.addEventListener('click', () => {
+            syncModal.style.display = 'none';
+        });
+
+        window.addEventListener('click', (e) => {
+            if (e.target === syncModal) {
+                syncModal.style.display = 'none';
+            }
+        });
+
+        // Size and color controls
+        brushSize.addEventListener('input', () => {
+            currentSize = brushSize.value;
+            sizeDisplay.textContent = currentSize;
+        });
+
+        colorPicker.addEventListener('change', () => {
+            currentColor = colorPicker.value;
+        });
+
+        // Clear and reset
+        clearBtn.addEventListener('click', () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            broadcastDrawing({
+                type: 'clear',
+                userId: userId,
+                timestamp: Date.now()
+            });
+        });
+
+        resetViewBtn.addEventListener('click', () => {
+            offsetX = 0;
+            offsetY = 0;
+            scale = 1;
+            updateTransform();
+        });
+
+        // Zoom controls
+        zoomInBtn.addEventListener('click', () => {
+            scale = Math.min(scale * 1.2, 5);
+            updateTransform();
+        });
+
+        zoomOutBtn.addEventListener('click', () => {
+            scale = Math.max(scale / 1.2, 0.1);
+            updateTransform();
+        });
+
+        // Mouse wheel zoom
+        canvasContainer.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const zoomIntensity = 0.1;
+            const wheel = e.deltaY < 0 ? 1 : -1;
+            const zoom = Math.exp(wheel * zoomIntensity);
+            
+            const rect = canvasContainer.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            
+            const worldPosX = (mouseX - offsetX) / scale;
+            const worldPosY = (mouseY - offsetY) / scale;
+            
+            scale = Math.max(0.1, Math.min(5, scale * zoom));
+            
+            offsetX = mouseX - worldPosX * scale;
+            offsetY = mouseY - worldPosY * scale;
+            
+            updateTransform();
+        });
+
+        // Get world coordinates from screen coordinates
+        function getWorldCoords(screenX, screenY) {
+            const rect = canvasContainer.getBoundingClientRect();
+            const x = (screenX - rect.left - offsetX) / scale;
+            const y = (screenY - rect.top - offsetY) / scale;
+            return { x, y };
+        }
+
+        // Drawing functions with sync
+        function startDrawing(e) {
+            const coords = getWorldCoords(e.clientX || e.touches[0].clientX, e.clientY || e.touches[0].clientY);
+            
+            if (currentTool === 'pan') {
+                isPanning = true;
+                lastPanX = e.clientX || e.touches[0].clientX;
+                lastPanY = e.clientY || e.touches[0].clientY;
+                canvas.style.cursor = 'grabbing';
+            } else if (currentTool === 'draw' || currentTool === 'erase') {
+                isDrawing = true;
+                
+                // Broadcast start of drawing
+                broadcastDrawing({
+                    type: 'start',
+                    x: coords.x,
+                    y: coords.y,
+                    color: currentColor,
+                    size: currentSize,
+                    operation: currentTool === 'draw' ? 'source-over' : 'destination-out',
+                    userId: userId,
+                    timestamp: Date.now()
+                });
+                
+                draw(e);
+            }
+        }
+
+        function draw(e) {
+            const coords = getWorldCoords(e.clientX || e.touches[0].clientX, e.clientY || e.touches[0].clientY);
+            
+            if (isPanning) {
+                const currentX = e.clientX || e.touches[0].clientX;
+                const currentY = e.clientY || e.touches[0].clientY;
+                
+                offsetX += currentX - lastPanX;
+                offsetY += currentY - lastPanY;
+                
+                lastPanX = currentX;
+                lastPanY = currentY;
+                
+                updateTransform();
+                return;
+            }
+            
+            if (!isDrawing) return;
+
+            ctx.lineWidth = currentSize / scale;
+
+            if (currentTool === 'draw') {
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.strokeStyle = currentColor;
+            } else if (currentTool === 'erase') {
+                ctx.globalCompositeOperation = 'destination-out';
+            }
+
+            ctx.lineTo(coords.x, coords.y);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(coords.x, coords.y);
+
+            // Throttle broadcasting to avoid spam
+            const now = Date.now();
+            if (now - lastDrawTime > 16) { // ~60fps
+                broadcastDrawing({
+                    type: 'draw',
+                    x: coords.x,
+                    y: coords.y,
+                    color: currentColor,
+                    size: currentSize,
+                    operation: currentTool === 'draw' ? 'source-over' : 'destination-out',
+                    userId: userId,
+                    timestamp: now
+                });
+                lastDrawTime = now;
+            }
+        }
+
+        function stopDrawing() {
+            if (isDrawing) {
+                isDrawing = false;
+                ctx.beginPath();
+                
+                // Broadcast end of drawing
+                broadcastDrawing({
+                    type: 'end',
+                    userId: userId,
+                    timestamp: Date.now()
+                });
+            }
+            if (isPanning) {
+                isPanning = false;
+                if (currentTool === 'pan') {
+                    canvas.style.cursor = 'grab';
+                }
+            }
+        }
+
+        // Mouse events
+        canvas.addEventListener('mousedown', startDrawing);
+        canvas.addEventListener('mousemove', draw);
+        canvas.addEventListener('mouseup', stopDrawing);
+        canvas.addEventListener('mouseleave', stopDrawing);
+
+        // Touch events
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            startDrawing(e);
+        });
+
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            draw(e);
+        });
+
+        canvas.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            stopDrawing();
+        });
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'd' || e.key === 'D') setTool('draw');
+            else if (e.key === 'e' || e.key === 'E') setTool('erase');
+            else if (e.key === 'p' || e.key === 'P') setTool('pan');
+            else if (e.key === 'c' || e.key === 'C') clearBtn.click();
+            else if (e.key === 'r' || e.key === 'R') resetViewBtn.click();
+            else if (e.key === 's' || e.key === 'S') syncBtn.click();
+            else if (e.key === 'Escape') {
+                if (syncModal.style.display === 'block') {
+                    syncModal.style.display = 'none';       
+                } else {
+                    stopDrawing();
+                    setTool('draw');
+                }                               
+            }
+        }); 
+        // Resize canvas on load
+        window.addEventListener('load', resizeCanvas);
+    </script>
+</body> 
+</html>
